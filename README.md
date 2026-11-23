@@ -1,8 +1,7 @@
-# Blog and deep-dive repo structure
+# LLM-Internals and deep-dive   
 
-A standard layout for technical blog posts and deep-dive docs on transformer internals and inference engineering.
+A standard layout for llm-internals and deep-di on training, transformer internals and inference engineering.
 
-Suggested repo names: `transformer-internals` or `inference-deep-dive`.
 
 ```text
 inference-deep-dive/
