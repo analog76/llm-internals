@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>vLLM Chat</title>
+  <style>
+    :root {
+      --bg: #12110e;
+      --bg-raised: #1c1b17;
+      --bg-input: #161510;
+      --line: #2e2c26;
+      --text: #e8e4d9;
+      --muted: #9a9588;
+      --faint: #6b675c;
+      --accent: #e0a35c;
+      --accent-dim: #8a6230;
+      --user-bg: #26231c;
+      --assistant-bg: #181712;
+      --danger: #d46a6a;
+      --ok: #8fbf7a;
+      --shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      max-width: 860px;
+      margin: 0 auto;
+      min-height: 100%;
+    }
+
+    header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 20px 12px;
+      border-bottom: 1px solid var(--line);
+      flex-shrink: 0;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+
+    header h1 span {
+      color: var(--muted);
+      font-weight: 400;
+      margin-left: 8px;
+      font-size: 13px;
+    }
+
+    #status {
+      font-size: 12px;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    #status.ok::before,
+    #status.bad::before,
+    #status.wait::before {
+      content: "";
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      margin-right: 7px;
+      vertical-align: middle;
+    }
+    #status.ok::before { background: var(--ok); }
+    #status.bad::before { background: var(--danger); }
+    #status.wait::before { background: var(--faint); }
+
+    #settings {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 10px 14px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--line);
+      background: var(--bg-raised);
+      flex-shrink: 0;
+    }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--faint);
+    }
+
+    #system-wrap { grid-column: 1 / -1; }
+
+    input[type="text"],
+    input[type="number"],
+    textarea,
+    select {
+      font: inherit;
+      color: var(--text);
+      background: var(--bg-input);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      outline: none;
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      border-color: var(--accent-dim);
+    }
+
+    #system {
+      resize: vertical;
+      min-height: 38px;
+      max-height: 160px;
+      text-transform: none;
+      letter-spacing: 0;
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    #controls-row {
+      display: contents;
+    }
+
+    #temp-wrap, #max-wrap, #model-wrap {
+      min-width: 0;
+    }
+
+    #model {
+      min-width: 200px;
+    }
+
+    #temp, #max-tokens {
+      width: 110px;
+    }
+
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 20px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    #empty {
+      margin: auto;
+      text-align: center;
+      color: var(--faint);
+      max-width: 28em;
+      padding: 40px 16px;
+    }
+
+    #empty strong {
+      display: block;
+      color: var(--muted);
+      font-weight: 550;
+      margin-bottom: 6px;
+    }
+
+    .msg {
+      max-width: 78%;
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .msg .role {
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--faint);
+      margin-bottom: 4px;
+    }
+
+    .msg .body {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      overflow-wrap: anywhere;
+    }
+
+    .msg.user {
+      align-self: flex-end;
+      background: var(--user-bg);
+      border-color: #3a3428;
+    }
+
+    .msg.user .role { color: var(--accent-dim); }
+
+    .msg.assistant {
+      align-self: flex-start;
+      background: var(--assistant-bg);
+    }
+
+    .msg.error {
+      align-self: stretch;
+      max-width: 100%;
+      background: #2a1616;
+      border-color: #5a2a2a;
+      color: #f0c4c4;
+    }
+
+    .msg.streaming .body::after {
+      content: "▍";
+      color: var(--accent);
+      animation: blink 1s step-end infinite;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0; }
+    }
+
+    .msg .meta {
+      margin-top: 8px;
+      font: 11px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: var(--faint);
+    }
+
+    #composer {
+      flex-shrink: 0;
+      padding: 12px 20px 16px;
+      border-top: 1px solid var(--line);
+      background: var(--bg);
+    }
+
+    #composer-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+
+    #prompt {
+      flex: 1;
+      resize: none;
+      min-height: 46px;
+      max-height: 200px;
+      padding: 11px 12px;
+      line-height: 1.45;
+    }
+
+    button {
+      font: inherit;
+      font-size: 13px;
+      font-weight: 550;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 14px;
+      background: var(--bg-raised);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    button:hover:not(:disabled) { border-color: var(--accent-dim); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    #send {
+      background: var(--accent);
+      color: #1a1208;
+      border-color: var(--accent);
+      min-width: 76px;
+    }
+
+    #send:hover:not(:disabled) { filter: brightness(1.05); }
+
+    #stop {
+      background: #3a1e1e;
+      color: #f0c4c4;
+      border-color: #5a2a2a;
+      display: none;
+      min-width: 76px;
+    }
+
+    #composer.busy #send { display: none; }
+    #composer.busy #stop { display: inline-block; }
+
+    #bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--faint);
+    }
+
+    #hint { color: var(--faint); }
+
+    #clear {
+      padding: 4px 8px;
+      font-size: 12px;
+      font-weight: 400;
+      background: transparent;
+    }
+
+    @media (max-width: 640px) {
+      #settings { grid-template-columns: 1fr 1fr; }
+      #model-wrap { grid-column: 1 / -1; }
+      .msg { max-width: 92%; }
+      #temp, #max-tokens { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>vLLM Chat<span id="subtitle">localhost:8000</span></h1>
+    <div id="status" class="wait">Connecting…</div>
+  </header>
+
+  <div id="settings">
+    <label id="system-wrap">System prompt
+      <textarea id="system" rows="1" placeholder="Optional. Sent as the first message in every request."></textarea>
+    </label>
+    <label id="model-wrap">Model
+      <select id="model">
+        <option value="">Loading…</option>
+      </select>
+    </label>
+    <label id="temp-wrap">Temperature
+      <input id="temp" type="number" min="0" max="2" step="0.05" value="0.7">
+    </label>
+    <label id="max-wrap">Max tokens
+      <input id="max-tokens" type="number" min="16" max="4096" step="16" value="512">
+    </label>
+  </div>
+
+  <div id="messages">
+    <div id="empty">
+      <strong>Ready when you are.</strong>
+      The full conversation is sent each turn, so the model can use earlier messages. Enter to send, Shift+Enter for a new line.
+    </div>
+  </div>
+
+  <form id="composer" autocomplete="off">
+    <div id="composer-row">
+      <textarea id="prompt" rows="1" placeholder="Message the model…" autofocus></textarea>
+      <button type="submit" id="send">Send</button>
+      <button type="button" id="stop">Stop</button>
+    </div>
+    <div id="bar">
+      <span id="hint">Enter to send · Shift+Enter for a newline</span>
+      <button type="button" id="clear">Clear chat</button>
+    </div>
+  </form>
+
+  <script>
+    const API = "/v1";
+    const messagesEl = document.getElementById("messages");
+    const emptyEl = document.getElementById("empty");
+    const promptEl = document.getElementById("prompt");
+    const systemEl = document.getElementById("system");
+    const modelEl = document.getElementById("model");
+    const tempEl = document.getElementById("temp");
+    const maxEl = document.getElementById("max-tokens");
+    const formEl = document.getElementById("composer");
+    const stopEl = document.getElementById("stop");
+    const clearEl = document.getElementById("clear");
+    const statusEl = document.getElementById("status");
+    const subtitleEl = document.getElementById("subtitle");
+
+    /** @type {{role: string, content: string}[]} */
+    let history = [];
+    /** @type {AbortController | null} */
+    let inflight = null;
+
+    function setStatus(kind, text) {
+      statusEl.className = kind;
+      statusEl.textContent = text;
+    }
+
+    function autosize(el) {
+      el.style.height = "auto";
+      el.style.height = Math.min(el.scrollHeight, 200) + "px";
+    }
+
+    promptEl.addEventListener("input", () => autosize(promptEl));
+
+    promptEl.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        formEl.requestSubmit();
+      }
+    });
+
+    async function loadModels() {
+      try {
+        const res = await fetch(API + "/models");
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        const models = Array.isArray(data.data) ? data.data : [];
+        modelEl.innerHTML = "";
+        if (models.length === 0) {
+          modelEl.appendChild(new Option("No models reported", ""));
+          setStatus("bad", "Connected, but no models");
+          return;
+        }
+        for (const item of models) {
+          const id = item.id || item.root || "";
+          if (!id) continue;
+          const option = new Option(id, id);
+          modelEl.appendChild(option);
+          if (item.max_model_len) {
+            const cap = Number(item.max_model_len);
+            if (cap > 0) maxEl.max = String(cap);
+          }
+        }
+        const first = models[0];
+        const name = (first && (first.id || first.root)) || "model";
+        subtitleEl.textContent = name;
+        setStatus("ok", "Connected");
+      } catch (err) {
+        modelEl.innerHTML = "";
+        modelEl.appendChild(new Option("Qwen/Qwen2.5-7B-Instruct", "Qwen/Qwen2.5-7B-Instruct"));
+        setStatus("bad", "Can't reach vLLM — is the tunnel up?");
+      }
+    }
+
+    function addMessage(role, text) {
+      emptyEl.style.display = "none";
+      const wrap = document.createElement("div");
+      wrap.className = "msg " + role;
+      const roleEl = document.createElement("div");
+      roleEl.className = "role";
+      roleEl.textContent = role === "user" ? "You" : role === "error" ? "Error" : "Assistant";
+      const body = document.createElement("div");
+      body.className = "body";
+      body.textContent = text;
+      wrap.appendChild(roleEl);
+      wrap.appendChild(body);
+      messagesEl.appendChild(wrap);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return wrap;
+    }
+
+    function setBusy(busy) {
+      formEl.classList.toggle("busy", busy);
+      promptEl.disabled = busy;
+      document.getElementById("send").disabled = busy;
+    }
+
+    function formatStats(elapsedSec, usage) {
+      const parts = [elapsedSec.toFixed(1) + "s"];
+      if (usage && typeof usage.completion_tokens === "number") {
+        const tok = usage.completion_tokens;
+        parts.push(tok + " tok");
+        if (elapsedSec > 0) {
+          parts.push((tok / elapsedSec).toFixed(1) + " tok/s");
+        }
+        if (typeof usage.prompt_tokens === "number") {
+          parts.push(usage.prompt_tokens + " prompt");
+        }
+      }
+      return parts.join(" · ");
+    }
+
+    /**
+     * Parse an SSE byte stream. Calls onDelta(text) for content,
+     * onUsage(usage) if a final usage chunk arrives.
+     */
+    async function readSse(response, onDelta, onUsage) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        buffer = flushSse(buffer, false, onDelta, onUsage);
+      }
+      buffer += decoder.decode();
+      flushSse(buffer, true, onDelta, onUsage);
+    }
+
+    function flushSse(buffer, flushAll, onDelta, onUsage) {
+      let start = 0;
+      while (true) {
+        const nl = buffer.indexOf("\n", start);
+        if (nl === -1) break;
+        let line = buffer.slice(start, nl);
+        if (line.endsWith("\r")) line = line.slice(0, -1);
+        consumeSseLine(line, onDelta, onUsage);
+        start = nl + 1;
+      }
+      const rest = buffer.slice(start);
+      if (flushAll) {
+        consumeSseLine(rest, onDelta, onUsage);
+        return "";
+      }
+      return rest;
+    }
+
+    function consumeSseLine(line, onDelta, onUsage) {
+      if (!line.startsWith("data:")) return;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === "[DONE]") return;
+      let json;
+      try {
+        json = JSON.parse(payload);
+      } catch {
+        return;
+      }
+      const delta = json.choices && json.choices[0] && json.choices[0].delta;
+      if (delta && typeof delta.content === "string" && delta.content) {
+        onDelta(delta.content);
+      }
+      if (json.usage) onUsage(json.usage);
+    }
+
+    async function send(event) {
+      event.preventDefault();
+      if (inflight) return;
+      const text = promptEl.value.trim();
+      if (!text) return;
+
+      const model = modelEl.value.trim();
+      if (!model) {
+        addMessage("error", "No model selected. Is vLLM reachable?");
+        return;
+      }
+
+      const temperature = Number(tempEl.value);
+      const maxTokens = Number(maxEl.value);
+      promptEl.value = "";
+      autosize(promptEl);
+
+      addMessage("user", text);
+      const assistantEl = addMessage("assistant", "");
+      assistantEl.classList.add("streaming");
+      const bodyEl = assistantEl.querySelector(".body");
+      const metaEl = document.createElement("div");
+      metaEl.className = "meta";
+      assistantEl.appendChild(metaEl);
+
+      const messages = [];
+      const system = systemEl.value.trim();
+      if (system) messages.push({ role: "system", content: system });
+      for (const turn of history) messages.push(turn);
+      messages.push({ role: "user", content: text });
+
+      const controller = new AbortController();
+      inflight = controller;
+      setBusy(true);
+
+      const started = performance.now();
+      let elapsedTimer = setInterval(() => {
+        const sec = (performance.now() - started) / 1000;
+        metaEl.textContent = sec.toFixed(1) + "s";
+      }, 200);
+
+      let reply = "";
+      let usage = null;
+
+      try {
+        const res = await fetch(API + "/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            model,
+            messages,
+            temperature: Number.isFinite(temperature) ? temperature : 0.7,
+            max_tokens: Number.isFinite(maxTokens) ? maxTokens : 512,
+            stream: true,
+            stream_options: { include_usage: true },
+          }),
+        });
+
+        if (!res.ok) {
+          let detail = "HTTP " + res.status;
+          try {
+            const err = await res.json();
+            detail = (err.error && err.error.message) || JSON.stringify(err);
+          } catch {
+            try { detail = await res.text(); } catch { /* keep status */ }
+          }
+          throw new Error(detail);
+        }
+
+        await readSse(
+          res,
+          (chunk) => {
+            reply += chunk;
+            bodyEl.textContent = reply;
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+          },
+          (u) => { usage = u; }
+        );
+
+        history.push({ role: "user", content: text });
+        history.push({ role: "assistant", content: reply });
+        if (!reply) bodyEl.textContent = "(no output)";
+      } catch (err) {
+        if (err && err.name === "AbortError") {
+          if (!reply) bodyEl.textContent = "(stopped)";
+          else history.push({ role: "user", content: text }, { role: "assistant", content: reply });
+        } else {
+          const message = (err && err.message) ? err.message : String(err);
+          if (!reply) {
+            assistantEl.remove();
+            addMessage("error", message);
+          } else {
+            bodyEl.textContent = reply;
+            metaEl.textContent = message;
+            history.push({ role: "user", content: text }, { role: "assistant", content: reply });
+          }
+        }
+      } finally {
+        clearInterval(elapsedTimer);
+        assistantEl.classList.remove("streaming");
+        const sec = (performance.now() - started) / 1000;
+        if (reply || usage) metaEl.textContent = formatStats(sec, usage);
+        inflight = null;
+        setBusy(false);
+        promptEl.focus();
+      }
+    }
+
+    formEl.addEventListener("submit", send);
+
+    stopEl.addEventListener("click", () => {
+      if (inflight) inflight.abort();
+    });
+
+    clearEl.addEventListener("click", () => {
+      if (inflight) inflight.abort();
+      history = [];
+      messagesEl.replaceChildren(emptyEl);
+      emptyEl.style.display = "";
+      promptEl.focus();
+    });
+
+    loadModels();
+  </script>
+</body>
+</html>
