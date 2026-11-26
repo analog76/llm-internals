@@ -49,7 +49,7 @@ For $j = 1, 2, \ldots$ until the end of the sequence:
 1. Load the next KV tile (rows of $K$ and $V$, also size 128 by $d$) from HBM into SRAM.
 2. Compute the local score tile entirely in SRAM:
    $$
-   S = Q_{\text{tile}} K_{\text{tile}}^\top \quad (128 \times 128)
+   S = Q_{tile} K_{\text{tile}}^\top \quad (128 \times 128)
    $$
 3. Update the online softmax statistics $m$ and $l$ for each of the 128 query rows (details below).
 4. Weight the corresponding rows of $V$ by the current (un-normalized) exponentials and add the result into a partial output accumulator that also lives in SRAM.
@@ -79,7 +79,7 @@ When a new block of scores arrives:
 - Let $m_{\text{new}} = \max(m_{\text{old}}, \text{max score in new block})$.
 - If $m_{\text{new}} > m_{\text{old}}$, rescale the old sum:
   $$
-  l \leftarrow l \cdot \exp(m_{\text{old}} - m_{\text{new}})
+  l \leftarrow l \cdot \e^(m_{\text{old}} - m_{\text{new}})
   $$
 - Set $m \leftarrow m_{\text{new}}$ and add the new block’s exponentials (shifted by the new maximum).
 
@@ -94,7 +94,7 @@ One query row, two blocks:
 
 **After Block 1**
 - $m = 2.0$
-- Shifted exponentials: $\exp(0) + \exp(-1) \approx 1.368$
+- Shifted exponentials: $\e^(0) + \e^(-1) \approx 1.368$
 - $l = 1.368$
 
 **During Block 2**
